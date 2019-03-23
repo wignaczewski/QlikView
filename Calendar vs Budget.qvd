@@ -1,0 +1,237 @@
+// ============== Products ==============
+ProductCategories:
+LOAD ProductCategoryID, 
+ ProductCategory, 
+ Description
+FROM ProductCategories.qvd (qvd);
+
+Products:
+LOAD 
+// ProductCategoryID, 
+ ProductID, 
+ ProductName, 
+ UnitCost, 
+ ListPrice, 
+ UnitsInStock, 
+ UnitsOnOrder
+FROM Products.qvd (qvd);
+
+MapProductIDToProductCategoryID:
+Mapping Load
+ ProductID, ProductCategoryID
+ FROM Products.qvd (qvd);
+
+[Products link table]:
+Load distinct
+ ProductCategoryID & '|' & ProductID as %ProductID,
+ ProductCategoryID,
+ ProductID 
+ FROM Products.qvd (qvd);
+Load distinct 
+ ProductCategoryID & '|' & '<N/A>' as %ProductID,
+ ProductCategoryID,
+ Null() as ProductID 
+ FROM Products.qvd (qvd);
+
+// ============== Customers ==============
+Countries:
+LOAD Country, 
+ [Offical name of Country], 
+ Capital, 
+ [Area(km.sq)], 
+ [Population(mio)]
+FROM Countries.qvd (qvd);
+
+Customers:
+LOAD Address, 
+ City, 
+ CustomerName, 
+ ContactName, 
+// Country, 
+ CustomerID, 
+ Phone
+FROM Customers.qvd (qvd);
+
+MapCustomerIDToCountry:
+Mapping Load
+ CustomerID, Country
+ FROM Customers.qvd (qvd);
+
+[Customers link table]:
+Load distinct
+ Country & '|' & CustomerID as %CustomerID,
+ Country,
+ CustomerID 
+ FROM Customers.qvd (qvd);
+Load distinct 
+ Country & '|' & '<N/A>' as %CustomerID,
+ Country,
+ Null() as CustomerID 
+ FROM Customers.qvd (qvd);
+
+// ============== Actual Numbers ==============
+Facts:
+LOAD OrderID, 
+ EmployeeID, 
+ Applymap('MapCustomerIDToCountry',CustomerID) & '|' & CustomerID as %CustomerID, 
+ Applymap('MapProductIDToProductCategoryID',ProductID) & '|' & ProductID as %ProductID, 
+ 'Date:' & Num(OrderDate) as %Date, 
+ 'Actuals' as Type,
+ Amount
+FROM ActualTransactions.qvd (qvd);
+
+// ============== Budget Numbers ==============
+Concatenate (Facts) 
+LOAD Country & '|' & '<N/A>' as %CustomerID,
+ ProductCategoryID & '|' & '<N/A>' as %ProductID, 
+ 'Year:' & Num(MakeDate(BudgetYear)) as %Date,
+ 'Budget' as Type,
+ Budget as Amount
+FROM Budget.xlsx (ooxml, embedded labels, table is Budget);
+
+// ============== MinMaxDate ==============
+MinMaxDate:
+Load 
+ YearStart(Min(Subfield(%Date,':',2))) as MinDate,
+ YearEnd (Max(Subfield(%Date,':',2))) as MaxDate
+ resident Facts;
+Let vMinDate = peek('MinDate',-1,'MinMaxDate') - 1;
+Let vMaxDate = peek('MaxDate',-1,'MinMaxDate');
+Drop Table MinMaxDate;
+
+// ============== Calendar ==============
+Calendar: 
+Load distinct // --- individual dates
+ Year(Date) as Year,
+ Month(Date) as Month,
+ Day(Date) as Day,
+ Date(MonthStart(Date),'YYYY MMM') as RollingMonth,
+ 'Date:' & Num(Date) as %Date
+ ;
+Load Date($(vMinDate) + recno()) as Date autogenerate vMaxDate - vMinDate;
+
+Concatenate 
+Load distinct // --- individual years
+ Year(Date) as Year,
+ 'Year:' & Num(YearStart(Date)) as %Date
+ ;
+Load Date($(vMinDate) + recno()) as Date autogenerate vMaxDate - vMinDate;
+=====================================
+// ============== Products ==============
+ProductCategories:
+LOAD ProductCategoryID, 
+ ProductCategory, 
+ Description
+FROM ProductCategories.qvd (qvd);
+Products:
+LOAD 
+// ProductCategoryID, 
+ ProductID, 
+ ProductName, 
+ UnitCost, 
+ ListPrice, 
+ UnitsInStock, 
+ UnitsOnOrder
+FROM Products.qvd (qvd);
+MapProductIDToProductCategoryID:
+Mapping Load
+ ProductID, ProductCategoryID
+ FROM Products.qvd (qvd);
+[Products link table]:
+Load distinct
+ ProductCategoryID & '|' & ProductID as %ProductID,
+ ProductCategoryID,
+ ProductID 
+ FROM Products.qvd (qvd);
+Load distinct 
+ ProductCategoryID & '|' & '<N/A>' as %ProductID,
+ ProductCategoryID,
+ Null() as ProductID 
+ FROM Products.qvd (qvd);
+
+// ============== Customers ==============
+Countries:
+LOAD Country, 
+ [Offical name of Country], 
+ Capital, 
+ [Area(km.sq)], 
+ [Population(mio)]
+FROM Countries.qvd (qvd);
+
+Customers:
+LOAD Address, 
+ City, 
+ CustomerName, 
+ ContactName, 
+// Country, 
+ CustomerID, 
+ Phone
+FROM Customers.qvd (qvd);
+
+MapCustomerIDToCountry:
+Mapping Load
+ CustomerID, Country
+ FROM Customers.qvd (qvd);
+
+[Customers link table]:
+Load distinct
+ Country & '|' & CustomerID as %CustomerID,
+ Country,
+ CustomerID 
+ FROM Customers.qvd (qvd);
+Load distinct 
+ Country & '|' & '<N/A>' as %CustomerID,
+ Country,
+ Null() as CustomerID 
+ FROM Customers.qvd (qvd);
+
+// ============== Actual Numbers ==============
+Facts:
+LOAD OrderID, 
+ EmployeeID, 
+ Applymap('MapCustomerIDToCountry',CustomerID) & '|' & CustomerID as %CustomerID, 
+ Applymap('MapProductIDToProductCategoryID',ProductID) & '|' & ProductID as %ProductID, 
+ 'Date:' & Num(OrderDate) as %Date, 
+ 'Actuals' as Type,
+ Amount
+FROM ActualTransactions.qvd (qvd);
+
+// ============== Budget Numbers ==============
+Concatenate (Facts) 
+LOAD Country & '|' & '<N/A>' as %CustomerID,
+ ProductCategoryID & '|' & '<N/A>' as %ProductID, 
+ 'Month:' & Num(MakeDate(BudgetYear,iterno())) as %Date,
+ 'Budget' as Type,
+ round(Budget/12) as Amount // ---- here I distribute the yearly budget evenly over 12 months
+FROM Budget.xlsx (ooxml, embedded labels, table is Budget)
+ While iterno() <= 12; // ---- here I generate the 12 months
+
+// ============== MinMaxDate ==============
+MinMaxDate:
+Load 
+ YearStart(Min(Subfield(%Date,':',2))) as MinDate,
+ YearEnd (Max(Subfield(%Date,':',2))) as MaxDate
+ resident Facts;
+Let vMinDate = peek('MinDate',-1,'MinMaxDate') - 1;
+Let vMaxDate = peek('MaxDate',-1,'MinMaxDate');
+Drop Table MinMaxDate;
+
+// ============== Calendar ==============
+Calendar: 
+Load distinct // --- individual dates
+ Year(Date) as Year,
+ Month(Date) as Month,
+ Day(Date) as Day,
+ Date(MonthStart(Date),'YYYY MMM') as RollingMonth,
+ 'Date:' & Num(Date) as %Date
+ ;
+Load Date($(vMinDate) + recno()) as Date autogenerate vMaxDate - vMinDate;
+
+Concatenate 
+Load distinct // --- individual months
+ Year(Date) as Year,
+ Month(Date) as Month,
+ Date(MonthStart(Date),'YYYY MMM') as RollingMonth,
+ 'Month:' & Num(MonthStart(Date)) as %Date
+ ;
+Load Date($(vMinDate) + recno()) as Date autogenerate vMaxDate - vMinDate;
